@@ -12,10 +12,17 @@ var LaravelTable = function() {
     this.token = '';
 
     /**
+     * for api only
+     */
+     this.apiToken = '';
+
+    /**
      * other configs
      */
 
     this.actionColumnEnabled = false;
+
+    this.reloadTime = 0;
 
     /**
      * html configs, defaults
@@ -47,6 +54,12 @@ var LaravelTable = function() {
 
     this.laravelData = {};
 
+
+    /**
+     * current active source url where the data is coming from
+     */
+    this.activeSourceUrl = '';
+
     /**
      * lets go
      */
@@ -57,41 +70,60 @@ var LaravelTable = function() {
 
     this.ready = function() {
 
-        var _this = this;
-
-
-        let paginationClickCB = function() {
-
-            var classname = document.getElementsByClassName("page-link");
-
-            var myFunction = function(e) {
-                e.preventDefault();
-                _this.sourceUrl = this.getAttribute("href");
-                _this.generateTable(paginationClickCB);
-            };
-
-            for (var i = 0; i < classname.length; i++) {
-                classname[i].addEventListener('click', myFunction, false);
-            }
-
-        };
-
-        this.generateTable(paginationClickCB);
+        this.generateTable(this.paginationClickCB());
 
     }; // ready()
 
+    this.paginationClickCB = function() {
+
+        var _this = this;
+
+        var classname = document.getElementsByClassName("page-link");
+
+        var myFunction = function(e) {
+            e.preventDefault();
+            _this.sourceUrl = this.getAttribute("href");
+            _this.generateTable(paginationClickCB);
+        };
+
+        for (var i = 0; i < classname.length; i++) {
+            classname[i].addEventListener('click', myFunction, false);
+        }
+
+    }; // paginationClickCB()
+
     this.generateTable = function(cb) {
 
-        fetch(this.sourceUrl, {
+        var _this = this;
+
+        let fetchData = {};
+
+        if ( this.api ) {
+            fetchConfig = {
                 headers: {
                     "Content-Type": "application/json; charset=utf-8",
-                     "Accept": "application/json, text-plain, */*",
-                     "X-CSRF-TOKEN": this.token,
-                     'Access-Control-Allow-Origin':'*'
+                    "Accept": "application/json",
+                    "X-CSRF-TOKEN": this.token,
+                    'Access-Control-Allow-Origin':'*'
                 },
                 method: 'get',
                 mode: 'no-cors'
-            })
+            };
+        }
+
+        if ( this.apiToken ) {
+            fetchConfig = {
+                credentials: 'include',
+                headers: {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Accept": "application/json",
+                    'Authorization': 'Bearer ' + this.apiToken
+                },
+                method: 'get',
+            }
+        }
+
+        fetch(this.sourceUrl, fetchConfig)
             .then(res => {
                 return res.json();
             })
@@ -107,8 +139,27 @@ var LaravelTable = function() {
                     if (typeof cb === 'function')
                         cb();
 
+                    /**
+                     * make it real time, reload the table from the
+                     */
+                    if (parseInt(this.reloadTime) > 0) {
+
+                        setTimeout(function () {
+
+                            _this.generateTable(_this.paginationClickCB());
+
+                        }, parseInt(this.reloadTime) + '000');
+
+                    } // endif
+
                 } else {
-                    this.messageUser('Invalid data from source!', 'error');
+
+                    let message = 'Invalid data from source!';
+
+                    if (typeof data.message !== 'undefined' )
+                        message = data.message;
+
+                    this.messageUser(data.message, 'error');
                 }
 
             })
@@ -181,7 +232,7 @@ var LaravelTable = function() {
 
         var data = this.laravelData.data;
 
-        for (var i = 1, len = data.length; i < len; i++) {
+        for (var i = 0, len = data.length; i < len; i++) {
 
             for (let index in data[i])
                 html += _this.tableHeaderTdOpTag + index.replace(/./,index=>index.toUpperCase()).replace(/_/, ' ') + '</th>';
@@ -282,6 +333,7 @@ var LaravelTable = function() {
         switch(type) {
             case 'error':
                 try {
+                    alert('Error: ' + msg);
                     console.error('Error: ' + msg);
                     throw '';
                 } catch (e) {
@@ -290,6 +342,7 @@ var LaravelTable = function() {
                 break;
             case 'info':
             default:
+                alert(msg);
                 console.log(msg);
                 break;
         } // endswitch
